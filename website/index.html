@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EchoCore — Smart Home Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@700&family=Archivo+Narrow:wght@500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ═══════════════════════════════════════════
+       HERO
+  ═══════════════════════════════════════════ -->
+  <section id="hero">
+    <canvas id="particle-canvas"></canvas>
+    <div class="sonar-rings">
+      <div class="ring r1"></div>
+      <div class="ring r2"></div>
+      <div class="ring r3"></div>
+      <div class="ring r4"></div>
+    </div>
+    <div class="hero-center">
+      <div class="orb-hero" id="hero-orb">
+        <div class="orb-core"></div>
+        <div class="orb-ring or1"></div>
+        <div class="orb-ring or2"></div>
+        <div class="orb-ring or3"></div>
+        <div class="orb-glow-bg"></div>
+      </div>
+      <h1 class="wordmark" id="hero-wordmark">EchoCore</h1>
+      <p class="tagline">SENSE EVERYTHING. MISS NOTHING.</p>
+      <a href="#assistant" class="btn-pill hero-cta">Activate Echo</a>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       LIVE ASSISTANT
+  ═══════════════════════════════════════════ -->
+  <section id="assistant">
+    <div class="section-inner">
+      <p class="eyebrow">LIVE ASSISTANT</p>
+      <h2>MEET YOUR ECHO</h2>
+      <p class="section-sub">EchoCore's core processes every signal — motion, gas, sound, temperature — and speaks back in real time.</p>
+
+      <div class="assistant-stage">
+        <div class="echo-orb" id="echo-orb">
+          <div class="orb-core"></div>
+          <div class="orb-ring or1"></div>
+          <div class="orb-ring or2"></div>
+          <div class="orb-ring or3"></div>
+          <div class="voice-bars" id="voice-bars">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+        <div class="assistant-controls">
+          <div class="voice-status-label" id="voice-label">Ready — press to speak</div>
+          <button class="btn-pill" id="talk-btn" onclick="EchoCoreApp.voice.start()">🎙 Talk to Echo</button>
+          <div class="transcript-box" id="transcript-box"></div>
+          <div class="whatsapp-row">
+            <input type="text" id="wa-msg" placeholder="Send a WhatsApp alert..." class="wa-input" />
+            <button class="btn-pill btn-wa" onclick="EchoCoreApp.sendWhatsApp()">Send via WhatsApp</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Voice Commands Reference -->
+      <div class="commands-grid">
+        <div class="cmd-chip">"turn on fan"</div>
+        <div class="cmd-chip">"turn off fan"</div>
+        <div class="cmd-chip">"turn on light"</div>
+        <div class="cmd-chip">"turn off light"</div>
+        <div class="cmd-chip">"turn on buzzer"</div>
+        <div class="cmd-chip">"turn off buzzer"</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       SENSOR DASHBOARD
+  ═══════════════════════════════════════════ -->
+  <section id="dashboard">
+    <div class="section-inner">
+      <p class="eyebrow eyebrow-light">SYSTEM STATUS</p>
+      <h2 class="light">SENSOR DASHBOARD</h2>
+      <p class="section-sub light">Monitor every node. Control every output. All from one place.</p>
+
+      <div class="sensor-grid" id="sensor-grid">
+
+        <!-- PIR Motion -->
+        <div class="sensor-card" id="card-motion">
+          <div class="card-icon">🚶</div>
+          <div class="card-label">PIR Motion</div>
+          <div class="card-value" id="val-motion">--</div>
+          <div class="card-status" id="status-motion">Waiting...</div>
+        </div>
+
+        <!-- MQ-2 Gas -->
+        <div class="sensor-card" id="card-gas">
+          <div class="card-icon">💨</div>
+          <div class="card-label">MQ-2 Gas</div>
+          <div class="card-value" id="val-gas">--</div>
+          <div class="card-status" id="status-gas">Waiting...</div>
+        </div>
+
+        <!-- Temperature -->
+        <div class="sensor-card" id="card-temp">
+          <div class="card-icon">🌡️</div>
+          <div class="card-label">Temperature</div>
+          <div class="card-value" id="val-temp">--</div>
+          <div class="card-status ok">DHT11</div>
+        </div>
+
+        <!-- Humidity -->
+        <div class="sensor-card" id="card-hum">
+          <div class="card-icon">💧</div>
+          <div class="card-label">Humidity</div>
+          <div class="card-value" id="val-hum">--</div>
+          <div class="card-status ok">DHT11</div>
+        </div>
+
+        <!-- Sound Level -->
+        <div class="sensor-card" id="card-sound">
+          <div class="card-icon">🔊</div>
+          <div class="card-label">Sound Level</div>
+          <div class="card-value" id="val-sound">--</div>
+          <div class="card-status" id="status-sound">GPIO39
+          </div>
+        </div>
+
+        <!-- Fan Control -->
+        <div class="sensor-card control-card" id="card-fan">
+          <div class="card-icon">🌀</div>
+          <div class="card-label">Fan / Relay</div>
+          <div class="card-value" id="val-fan">OFF</div>
+          <div class="toggle-row">
+            <button class="ctrl-btn on"  onclick="EchoCoreApp.cmd('/fan/on')">ON</button>
+            <button class="ctrl-btn off" onclick="EchoCoreApp.cmd('/fan/off')">OFF</button>
+          </div>
+        </div>
+
+        <!-- Buzzer Control -->
+        <div class="sensor-card control-card" id="card-buzzer">
+          <div class="card-icon">🔔</div>
+          <div class="card-label">Buzzer</div>
+          <div class="card-value" id="val-buzzer">OFF</div>
+          <div class="toggle-row">
+            <button class="ctrl-btn on"  onclick="EchoCoreApp.cmd('/buzzer/on')">ON</button>
+            <button class="ctrl-btn off" onclick="EchoCoreApp.cmd('/buzzer/off')">OFF</button>
+          </div>
+        </div>
+
+        <!-- LED Control -->
+        <div class="sensor-card control-card" id="card-led">
+          <div class="card-icon">💡</div>
+          <div class="card-label">Clap LED</div>
+          <div class="card-value" id="val-led">OFF</div>
+          <div class="toggle-row">
+            <button class="ctrl-btn on"  onclick="EchoCoreApp.cmd('/led/on')">ON</button>
+            <button class="ctrl-btn off" onclick="EchoCoreApp.cmd('/led/off')">OFF</button>
+          </div>
+        </div>
+
+        <!-- Gas Raw Value -->
+        <div class="sensor-card" id="card-gasval">
+          <div class="card-icon">📊</div>
+          <div class="card-label">Gas Level (ADC)</div>
+          <div class="card-value" id="val-gasval">--</div>
+          <div class="card-status" id="status-gasval">Raw analog value</div>
+        </div>
+
+      </div>
+
+      <div class="last-update">Last update: <span id="last-update-time">--</span></div>
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════════
+       FOOTER
+  ═══════════════════════════════════════════ -->
+  <footer>
+    <div class="footer-inner">
+      <div class="footer-left">
+        <span class="footer-wordmark">EchoCore</span>
+        <p>Built on ESP32. Powered by intelligence.</p>
+      </div>
+      <div class="footer-right">
+        <a href="#">Docs</a>
+        <a href="#">GitHub</a>
+        <a href="#">Contact</a>
+        <a href="#">About</a>
+      </div>
+    </div>
+    <div class="footer-copy">© 2025 EchoCore. All rights reserved.</div>
+  </footer>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
