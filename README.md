@@ -315,5 +315,5 @@ Built as an **IDP (Interdisciplinary Project)** at Bapuji Institute of Engineeri
 Manav- Hardware & Backend architecture — Flask, Groq AI pipeline, system design, ESP32 firmware, circuit design, sensor integration
 
 <div align="center">
-Made with ☕, a soldering iron, and way too many Serial.println() calls.
+Made with ☕ and way too many Serial.println() calls.
 </div>
