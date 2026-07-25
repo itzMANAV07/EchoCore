@@ -1,0 +1,302 @@
+// ============================================================
+//  EchoCore - ESP32 Station Mode
+//  Connects to home WiFi and talks to Flask server
+//  Sends sensor data every 2 seconds via HTTP POST
+//  Receives commands via HTTP endpoints
+//  Buzzer: ONLY on gas detection (not motion)
+//  Alert LED: ON when motion OR gas detected, plus manual control
+//  Clap/sound LED toggling REMOVED — Clap LED only via website/voice
+// ============================================================
+
+#include <WiFi.h>
+#include <WebServer.h>
+#include <HTTPClient.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <DHT.h>
+
+// ── WiFi Credentials ──────────────────────────────────────────
+const char* ssid      = "SKY";
+const char* password  = "sky@2007";
+const char* serverURL = "http://10.198.46.196:5000/data";
+
+// ── OLED ──────────────────────────────────────────────────────
+#define SCREEN_WIDTH  128
+#define SCREEN_HEIGHT  64
+#define OLED_RESET     -1
+Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
+
+// ── Pin Definitions ───────────────────────────────────────────
+#define SDA_PIN      21
+#define SCL_PIN      22
+#define PIR_PIN      27
+#define MQ2_DO_PIN   25
+#define MQ2_AO_PIN   35
+#define BUZZER_PIN    5
+#define RED_LED_PIN   4
+#define CLAP_LED_PIN  2
+#define RELAY_PIN    32
+#define DHT_PIN      14
+#define DHT_TYPE     DHT11
+
+// ── Thresholds ────────────────────────────────────────────────
+#define GAS_THRESHOLD  1500
+#define TEMP_THRESHOLD 35.0
+
+// ── Objects ───────────────────────────────────────────────────
+WebServer server(80);
+DHT       dht(DHT_PIN, DHT_TYPE);
+
+// ── State ─────────────────────────────────────────────────────
+bool          clapLedState    = false;
+bool          alertLedManual  = false;
+bool          fanManual       = false;
+bool          fanByTemp       = false;
+bool          buzzerManual    = false;
+unsigned long lastSendTime    = 0;
+const long    sendInterval    = 2000;
+
+// =============================================================
+//  FAN UPDATE — active-LOW relay
+// =============================================================
+void updateFan() {
+  bool state = fanByTemp || fanManual;
+  digitalWrite(RELAY_PIN, state ? LOW : HIGH);
+}
+
+// =============================================================
+//  BUZZER UPDATE — only gas + manual, NOT motion
+// =============================================================
+void updateBuzzer(bool gasActive) {
+  bool state = gasActive || buzzerManual;
+  digitalWrite(BUZZER_PIN, state ? HIGH : LOW);
+}
+
+// =============================================================
+//  ALERT LED UPDATE — motion OR gas OR manual override
+// =============================================================
+bool updateAlertLed(bool motion, bool gas) {
+  bool state = motion || gas || alertLedManual;
+  digitalWrite(RED_LED_PIN, state ? HIGH : LOW);
+  return state;
+}
+
+// =============================================================
+//  OLED SCREENS
+// =============================================================
+void showWelcome() {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(10, 10);
+  display.println("  Welcome to");
+  display.setTextSize(2);
+  display.setCursor(8, 28);
+  display.println("EchoCore");
+  display.setTextSize(1);
+  display.setCursor(48, 52);
+  display.println("!!");
+  display.display();
+}
+
+void showConnecting() {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(10, 20);
+  display.println("Connecting to");
+  display.setCursor(10, 35);
+  display.println("WiFi...");
+  display.display();
+}
+
+void showConnected(String ip) {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(5, 10);
+  display.println("WiFi Connected!");
+  display.setCursor(5, 28);
+  display.println("ESP32 IP:");
+  display.setCursor(5, 44);
+  display.println(ip);
+  display.display();
+  delay(3000);
+  showWelcome();
+}
+
+void showMotion() {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(20, 5);
+  display.println("!! ALERT !!");
+  display.drawLine(0, 16, 127, 16, SSD1306_WHITE);
+  display.setTextSize(2);
+  display.setCursor(5, 24);
+  display.println("MOTION");
+  display.setCursor(5, 44);
+  display.println("DETECTED");
+  display.display();
+}
+
+void showGas() {
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setTextSize(1);
+  display.setCursor(20, 5);
+  display.println("!! WARNING !!");
+  display.drawLine(0, 16, 127, 16, SSD1306_WHITE);
+  display.setTextSize(2);
+  display.setCursor(20, 24);
+  display.println("GAS");
+  display.setCursor(5, 44);
+  display.println("DETECTED");
+  display.display();
+}
+
+// =============================================================
+//  SEND SENSOR DATA TO FLASK
+// =============================================================
+void sendToFlask(bool motion, bool gas, int gasVal,
+                 float temp, float hum, bool fan, bool clapLed, bool alertLed) {
+  if (WiFi.status() != WL_CONNECTED) return;
+
+  HTTPClient http;
+  http.begin(serverURL);
+  http.addHeader("Content-Type", "application/json");
+
+  String payload = "{";
+  payload += "\"temp\":"      + String(temp, 1)      + ",";
+  payload += "\"humidity\":"  + String(hum, 1)       + ",";
+  payload += "\"motion\":"    + String(motion ? 1:0) + ",";
+  payload += "\"gas\":"       + String(gas    ? 1:0) + ",";
+  payload += "\"gas_val\":"   + String(gasVal)        + ",";
+  payload += "\"fan\":"       + String(fan    ? 1:0) + ",";
+  payload += "\"clap_led\":"  + String(clapLed? 1:0) + ",";
+  payload += "\"alert_led\":" + String(alertLed?1:0);
+  payload += "}";
+
+  int code = http.POST(payload);
+  if (code > 0) {
+    Serial.println("Sent to Flask: " + String(code));
+  } else {
+    Serial.println("Flask POST failed: " + String(code));
+  }
+  http.end();
+}
+
+// =============================================================
+//  ESP32 COMMAND ENDPOINTS
+// =============================================================
+void handleFanOn()       { fanManual = true;    updateFan(); server.send(200, "text/plain", "Fan ON");        }
+void handleFanOff()      { fanManual = false;   updateFan(); server.send(200, "text/plain", "Fan OFF");       }
+void handleBuzzerOn()    { buzzerManual = true;  digitalWrite(BUZZER_PIN, HIGH); server.send(200, "text/plain", "Buzzer ON");   }
+void handleBuzzerOff()   { buzzerManual = false; digitalWrite(BUZZER_PIN, LOW);  server.send(200, "text/plain", "Buzzer OFF");  }
+void handleLedOn()       { clapLedState = true;  digitalWrite(CLAP_LED_PIN, HIGH); server.send(200, "text/plain", "LED ON");   }
+void handleLedOff()      { clapLedState = false; digitalWrite(CLAP_LED_PIN, LOW);  server.send(200, "text/plain", "LED OFF");  }
+void handleAlertLedOn()  { alertLedManual = true;  digitalWrite(RED_LED_PIN, HIGH); server.send(200, "text/plain", "Alert LED ON");  }
+void handleAlertLedOff() { alertLedManual = false; digitalWrite(RED_LED_PIN, LOW);  server.send(200, "text/plain", "Alert LED OFF"); }
+void handleStatus()      { server.send(200, "text/plain", "EchoCore OK"); }
+
+// =============================================================
+//  SETUP
+// =============================================================
+void setup() {
+  pinMode(RELAY_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, HIGH);
+
+  Serial.begin(115200);
+
+  pinMode(PIR_PIN,      INPUT_PULLDOWN);
+  pinMode(MQ2_DO_PIN,   INPUT);
+  pinMode(BUZZER_PIN,   OUTPUT);
+  pinMode(RED_LED_PIN,  OUTPUT);
+  pinMode(CLAP_LED_PIN, OUTPUT);
+
+  digitalWrite(BUZZER_PIN,   LOW);
+  digitalWrite(RED_LED_PIN,  LOW);
+  digitalWrite(CLAP_LED_PIN, LOW);
+
+  Wire.begin(SDA_PIN, SCL_PIN);
+  if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {
+    Serial.println("OLED not found!");
+    while (true);
+  }
+
+  dht.begin();
+  showConnecting();
+
+  WiFi.begin(ssid, password);
+  Serial.print("Connecting to WiFi");
+  int tries = 0;
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+    tries++;
+    if (tries > 40) {
+      Serial.println("\nWiFi failed!");
+      display.clearDisplay();
+      display.setCursor(5, 20);
+      display.println("WiFi Failed!");
+      display.display();
+      while (true);
+    }
+  }
+
+  Serial.println("\nWiFi connected!");
+  Serial.print("ESP32 IP: ");
+  Serial.println(WiFi.localIP());
+  showConnected(WiFi.localIP().toString());
+
+  server.on("/fan/on",       handleFanOn);
+  server.on("/fan/off",      handleFanOff);
+  server.on("/buzzer/on",    handleBuzzerOn);
+  server.on("/buzzer/off",   handleBuzzerOff);
+  server.on("/led/on",       handleLedOn);
+  server.on("/led/off",      handleLedOff);
+  server.on("/alertled/on",  handleAlertLedOn);
+  server.on("/alertled/off", handleAlertLedOff);
+  server.on("/status",       handleStatus);
+  server.begin();
+
+  Serial.println("EchoCore ready!");
+  Serial.println("Give this IP to Flask: " + WiFi.localIP().toString());
+}
+
+// =============================================================
+//  LOOP
+// =============================================================
+void loop() {
+  server.handleClient();
+
+  bool  motion   = digitalRead(PIR_PIN);
+  int   gasVal   = analogRead(MQ2_AO_PIN);
+  bool  gas      = (gasVal > GAS_THRESHOLD);
+  float temp     = dht.readTemperature();
+  float hum      = dht.readHumidity();
+
+  if (motion) showMotion();
+  if (gas)    showGas();
+
+  bool alertLedState = updateAlertLed(motion, gas);
+  updateBuzzer(gas);
+
+  if (!motion && !gas) showWelcome();
+
+  if (!isnan(temp)) fanByTemp = (temp > TEMP_THRESHOLD);
+  updateFan();
+
+  if (millis() - lastSendTime >= sendInterval) {
+    lastSendTime = millis();
+    sendToFlask(motion, gas, gasVal,
+                isnan(temp) ? 0 : temp,
+                isnan(hum)  ? 0 : hum,
+                fanByTemp || fanManual,
+                clapLedState,
+                alertLedState);
+  }
+
+  delay(100);
+}
